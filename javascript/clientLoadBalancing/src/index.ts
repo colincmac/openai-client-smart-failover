@@ -1,7 +1,9 @@
 import { AzureKeyCredential } from "@azure/core-auth";
-import { OpenAIClient, OpenAIClientOptions } from "@azure/openai";
-import { PipelinePolicy, PipelineRetryOptions, PipelineRequest, SendRequest, PipelineResponse, HttpHeaders } from "@azure/core-rest-pipeline";
-import * as openaiRest from "@azure-rest/openai";
+import { OpenAIClient } from "@azure/openai";
+import { roundRobinThrottlingStrategy } from "./roundRobinThrottlingStrategy";
+import { mockRetryPolicy } from "./mockRetry";
+// Use this for the real retryPolicy
+import { retryPolicy } from "@azure/core-rest-pipeline";
 
 function init() {
   const form = document.querySelector("form");
@@ -25,29 +27,24 @@ async function submitHandler(e: Event) {
   }
 }
 
-
-const sendFailedRequest = (request: PipelineRequest, next: SendRequest) => {
-  return next(request);
-};
-
+/**
+ * getCompletion is purposefully configured with a bad endpoint to demonstrate the round-robin load balancing strategy.
+ * The first request will always return a 429 status code, and the second request will be routed to the second endpoint provided to the strategy.
+ * mockRetry 
+ */
 async function getCompletion(deploymentId: string, azureKey: string, endpoint: string, promptInput: string) {
   const credential = new AzureKeyCredential(azureKey);
-  const coordinator = new OpenAIEndpointCoordinator([
-    "https://api.openai.com",
-    endpoint
-  ]);
-
-  const client = new OpenAIClient(endpoint, credential, {
+  // The roundRobinThrottlingStrategy
+  const client = new OpenAIClient("https://example.com", credential, {
     additionalPolicies: [
       {
         position: "perCall",
-        policy: coordinator.mockRetry()
-      },
-      {
-        position: "perRetry",
-        policy: coordinator.switchEndpoint()
+        policy: mockRetryPolicy([roundRobinThrottlingStrategy([
+          "https://example.com",
+          endpoint
+        ])], { maxRetries: 3 })
       }
-    ]
+    ],
   });
 
   var messages = [
@@ -57,62 +54,10 @@ async function getCompletion(deploymentId: string, azureKey: string, endpoint: s
     }
   ]
   const { choices } = await client.getChatCompletions(deploymentId, messages, { 
-    maxTokens: 150,
-    onResponse: (response) => {
-      console.log(response);
-      if (response.status === 429) {
-        console.log("Retrying request");
-        return true;
-      }
-
-    },
+    maxTokens: 150
   })
-  // const { choices } = await client.getCompletions(deploymentId, [promptInput]);
-  console.log(choices);
-  return choices.map((choice) => choice.message.content).join("\n");
-}
-class OpenAIEndpointCoordinator {
-  currentRetries = 0;
-  openAIEndpoints: string[];
-  constructor(endpoints: string[]) {
-    this.openAIEndpoints = endpoints;
-  }
-  mockRetry(): PipelinePolicy {
-    const policy: PipelinePolicy = {
-      name: "mockRetry",
-      sendRequest: (request, next) => {
-        if (this.currentRetries <= 0) {
-          return next(request);
-        }
-        console.log("Mocking retry");
-        this.currentRetries++;
-        const resp: PipelineResponse = {
-          status: 429,
-          request: request,
-          headers: {} as HttpHeaders,
-          bodyAsText: "Too Many Requests"
-        }
-        return new Promise((resolve, reject) => resolve(resp));
-      },
-    };
-    return policy;
-  }
-  switchEndpoint(): PipelinePolicy {
-    const policy: PipelinePolicy = {
-      name: "switchEndpoint",
-      sendRequest: (request, next) => {
-        console.log("Switching endpoint due to having %d retries left", this.currentRetries);
-        if(this.currentRetries === 0) {
-          return next(request);
-        }
 
-        const currentUrl = new URL(request.url);
-        request.url = this.openAIEndpoints[this.currentRetries % this.openAIEndpoints.length + 1] + currentUrl.pathname + currentUrl.search;
-        return next(request);
-      },
-    };
-    return policy;
-  }
+  return choices.map((choice) => choice.message.content).join("\n");
 }
 
 init();
