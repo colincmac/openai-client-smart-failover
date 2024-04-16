@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Azure OpenAI Completions example</title>
+  <meta charset="utf-8" />
+</head>
+<body style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:13px;">
+  
+  <form id="content">
+    <input id="deploymentId" type="text" size="40" value="DEPLOYMENT_ID" /></br>
+    <input id="azureKey" type="text" size="40" value="KEY" /></br>
+    <input id="endpoint" type="text" size="80" value="https://your-resource.openai.azure.com/" /></br>
+    <textarea id="promptInput" rows="4" cols="50" value="What is the capital of France?"></textarea></br>
+    <button type="submit" class="button">Get Answer</button></br>
+    <div id="result" style="display: inline-block;width:500px;height:100px"></div>
+
+  </form>
+
+    <!-- OpenAI SDK reference sdk. -->
+  <!-- <script src="./dist/bundle.js"></script> -->
+
+</body>
+</html>
