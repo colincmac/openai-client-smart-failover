@@ -81,10 +81,10 @@ class OpenAIEndpointCoordinator {
     const policy: PipelinePolicy = {
       name: "mockRetry",
       sendRequest: (request, next) => {
-        console.log("Mocking retry");
         if (this.currentRetries <= 0) {
           return next(request);
         }
+        console.log("Mocking retry");
         this.currentRetries++;
         const resp: PipelineResponse = {
           status: 429,
